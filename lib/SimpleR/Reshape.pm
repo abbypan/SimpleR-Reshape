@@ -1,10 +1,11 @@
+# ABSTRACT: Reshape like R
 package SimpleR::Reshape;
 
 require Exporter;
 @ISA    = qw(Exporter);
 @EXPORT = qw( read_table melt cast );
 
-our $VERSION     = 0.01;
+our $VERSION     = 0.02;
 our $DEFAULT_SEP = ',';
 
 sub read_table {
@@ -110,6 +111,11 @@ sub cast {
         $measure_name{$v_name} = 1;
         my $v = $r->[ $opt{value} ];
         push @{ $kv{$k}{$v_name} }, $v;
+
+        if(exists $opt{reduce_sub}){
+            my $tmp = $opt{reduce_sub}->($kv{$k}{$v_name});
+            $kv{$k}{$v_name} = [ $tmp ];
+        }
         return;
     };
     read_table( $data, %opt );
@@ -120,9 +126,11 @@ sub cast {
             my ($r) = @_;
             for my $m_name ( keys(%measure_name) ) {
                 my $stat_v =
-                  $r->{$m_name} ? $opt{stat_sub}->( $r->{$m_name} ) : 0;
+                  exists $r->{$m_name} ? 
+                    $opt{stat_sub}->( $r->{$m_name} ) : 0;
                 $r->{$m_name} = $stat_v;
             }
+            $r->{$_} //= 0 for(@{ $opt{result_names} });
             return [ @{$r}{ @{ $opt{result_names} } } ];
         },
         write_filename => $opt{cast_filename},

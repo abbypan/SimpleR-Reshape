@@ -60,13 +60,23 @@ L<SimpleR::Reshape> 数据处理转换
     my $r = cast('02.melt.csv', 
         cast_filename => '03.cast.csv', 
 
+        #key 有 cnt / rank 两种
         names => [ qw/day hour state key value/ ], 
         id => [ 0, 1, 2 ],
         measure => 3, 
         value => 4, 
 
         stat_sub => sub { my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
+
         result_names => [ qw/day hour state cnt rank/ ], 
+
+        #reduce_sub => sub { my $s=0 ; $s+= $_[0][$_] for @{$_[0]}; return $s; }, 
     );
+
+注意：
+
+reduce_sub 是在读取数据的过程中处理value，默认是直接push到value列表里
+
+stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
 
 =cut
