@@ -128,7 +128,7 @@ sub cast {
         my $v_name = $r->[ $opt{measure} ] // 'ALL';
         $measure_name{$v_name} = 1;
 
-        my $v =  $r->[ $opt{value} ];
+        my $v =  ref($opt{value}) eq 'CODE' ? $opt{value}->($r) : $r->[ $opt{value} ];
         push @{ $kv{$k}{$v_name} }, $v;
 
         if(exists $opt{reduce_sub}){
