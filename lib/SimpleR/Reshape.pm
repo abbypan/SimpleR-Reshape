@@ -5,7 +5,7 @@ require Exporter;
 @ISA    = qw(Exporter);
 @EXPORT = qw(read_table write_table melt cast merge);
 
-our $VERSION     = 0.02;
+our $VERSION     = 0.03;
 our $DEFAULT_SEP = ',';
 
 
