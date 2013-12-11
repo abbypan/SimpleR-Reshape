@@ -109,6 +109,12 @@ sub melt {
     return read_table( $data, %opt );
 }
 
+sub cast_row_cell {
+    my ($r, $x) = @_;
+    my $v =  ref($x) eq 'CODE' ?  $x->($r) : $r->[ $x ];
+    return $v;
+}
+
 sub cast {
     my ( $data, %opt ) = @_;
     $opt{stat_sub} ||= sub { $_[0][0] };
@@ -125,10 +131,10 @@ sub cast {
             $kv{$k} = \%temp;
         }
 
-        my $v_name = $r->[ $opt{measure} ] // 'ALL';
+        my $v_name =  cast_row_cell($r, $opt{measure});
         $measure_name{$v_name} = 1;
 
-        my $v =  ref($opt{value}) eq 'CODE' ? $opt{value}->($r) : $r->[ $opt{value} ];
+        my $v =  cast_row_cell($r, $opt{value});
         push @{ $kv{$k}{$v_name} }, $v;
 
         if(exists $opt{reduce_sub}){
