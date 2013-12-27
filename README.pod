@@ -106,4 +106,17 @@ stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
     );
     # $r = [["a", "b", 1, 3], ["c", "d", 2, 4]]
 
+=head2 split_file
+
+把一个大文件按指定id或行数拆分成多个小文件
+    
+    my $src_file = '06.split_file.log';
+
+    split_file($src_file, id => [ 0 ] ,
+        # sep => ',', 
+        # split_filename => '06.test.log', 
+    );
+
+    split_file($src_file, line_cnt => 400);
+
 =cut

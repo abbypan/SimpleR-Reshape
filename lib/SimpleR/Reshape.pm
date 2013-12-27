@@ -3,20 +3,72 @@ package SimpleR::Reshape;
 
 require Exporter;
 @ISA    = qw(Exporter);
-@EXPORT = qw(read_table write_table melt cast merge);
+@EXPORT = qw(read_table write_table melt cast merge split_file);
 
-our $VERSION     = 0.03;
+our $VERSION     = 0.04;
 our $DEFAULT_SEP = ',';
 
+sub split_file {
+    my ($f, %opt) = @_;
+    $opt{split_filename} ||= $f;
+    $opt{return_arrayref} //= 0;
+    $opt{sep} //= $DEFAULT_SEP;
+
+    return split_file_line($f, %opt) if(exists $opt{line_cnt});
+
+    my %exist_fh;
+
+    $opt{conv_sub} = sub {
+        my ($r) = @_;
+        return unless($r);
+
+        my $k = join($opt{sep}, @{$r}[ @{ $opt{id} } ]);
+        $k=~s#[\\\/,]#-#g;
+
+        if(! exists $exist_fh{$k}){
+            my $file = "$opt{split_filename}.$k";
+            open $exist_fh{$k}, '>', $file;
+        }
+
+        my $fhw = $exist_fh{$k};
+        print $fhw join($opt{sep}, @$r), "\n";
+
+        return;
+    };
+
+    read_table($f, %opt);
+}
+
+sub split_file_line {
+    my ($file, %opt) = @_;
+    $opt{split_filename} ||= $file;
+
+    open my $fh,'<', $file;
+    my $i=0;
+    my $file_i = 1;
+    my $fhw;
+    while(<$fh>){
+        if($i==0){
+            open $fhw,'>', "$opt{split_filename}.$file_i";
+        }
+        print $fhw $_;
+        $i++;
+        if($i==$opt{line_cnt}){
+            $i=0;
+            $file_i++;
+        }
+    }
+    close $fh;
+}
 
 sub read_table {
     my ( $txt, %opt ) = @_;
 
     $opt{sep}             //= $DEFAULT_SEP;
     $opt{skip_head}       //= 0;
-    $opt{return_arrayref} //= 1;
     $opt{write_sub} = gen_sub_write_row( $opt{write_filename}, %opt )
       if ( exists $opt{write_filename} );
+    $opt{return_arrayref} //= exists $opt{write_filename} ? 0 : 1;
 
     my @data;
     my $row_deal_sub = sub {
@@ -145,18 +197,24 @@ sub cast {
     };
     read_table( $data, %opt );
 
+    print "finish read\n";
+
+    my @measure_name = keys(%measure_name);
+    while(my ($k, $r) = each %kv){
+        for my $m_name (@measure_name){
+            my $stat_v = exists $r->{$m_name} ?  $opt{stat_sub}->( $r->{$m_name} ) : 0;
+            $r->{$m_name} = $stat_v;
+        }
+        $r->{$_} //= 0 for(@{ $opt{result_names} });
+    }
+
     read_table(
         \%kv,
         conv_sub => sub {
             my ($r) = @_;
-            for my $m_name ( keys(%measure_name) ) {
-                my $stat_v =
-                  exists $r->{$m_name} ? 
-                    $opt{stat_sub}->( $r->{$m_name} ) : 0;
-                $r->{$m_name} = $stat_v;
-            }
-            $r->{$_} //= 0 for(@{ $opt{result_names} });
-            return [ @{$r}{ @{ $opt{result_names} } } ];
+            my $v = [ @{$r}{ @{ $opt{result_names} } } ];
+            $r = undef;
+            return  $v;
         },
         write_filename => $opt{cast_filename},
     );
