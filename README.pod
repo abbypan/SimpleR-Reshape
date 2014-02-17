@@ -32,6 +32,7 @@ L<SimpleR::Reshape> 数据处理转换
         write_filename => '01.read_table.csv', 
         #skip_sub => sub { $_[0][3]<200 }, 
         #return_arrayref => 1, 
+        #write_head => [ "head_a", "key" , "value" ], 
         #sep=>',', 
         #charset=>'utf8', 
     );
@@ -61,6 +62,7 @@ L<SimpleR::Reshape> 数据处理转换
         id => [ 0, 1, 2 ],
         measure => [3, 4], 
         melt_filename => '02.melt.csv',
+        #return_arrayref => 0, 
     );
 
 
@@ -70,6 +72,8 @@ L<SimpleR::Reshape> 数据处理转换
 
     my $r = cast('02.melt.csv', 
         cast_filename => '03.cast.csv', 
+        #return_arrayref => 0, 
+        #write_head => 0, 
 
         #key 有 cnt / rank 两种
         names => [ qw/day hour state key value/ ], 

@@ -5,7 +5,7 @@ require Exporter;
 @ISA    = qw(Exporter);
 @EXPORT = qw(read_table write_table melt cast merge split_file);
 
-our $VERSION     = 0.04;
+our $VERSION     = 0.05;
 our $DEFAULT_SEP = ',';
 
 sub split_file {
@@ -70,7 +70,14 @@ sub read_table {
       if ( exists $opt{write_filename} );
     $opt{return_arrayref} //= exists $opt{write_filename} ? 0 : 1;
 
+
     my @data;
+
+    if($opt{write_head}){
+        $opt{write_sub}->($opt{write_head}) if ( exists $opt{write_sub} ) ;
+        push @data, $opt{write_head} if ( $opt{return_arrayref} );
+    }
+
     my $row_deal_sub = sub {
         my ($row) = @_;
 
@@ -195,11 +202,14 @@ sub cast {
         }
         return;
     };
-    read_table( $data, %opt );
+    read_table( $data, %opt, 
+        return_arrayref => 0, 
+        write_head => 0, 
+    );
 
-    print "finish read\n";
+    my @measure_name = sort keys(%measure_name);
+    $opt{result_names} ||= [ @{$opt{names}}[@{$opt{id}}], @measure_name ];
 
-    my @measure_name = keys(%measure_name);
     while(my ($k, $r) = each %kv){
         for my $m_name (@measure_name){
             my $stat_v = exists $r->{$m_name} ?  $opt{stat_sub}->( $r->{$m_name} ) : 0;
@@ -217,6 +227,8 @@ sub cast {
             return  $v;
         },
         write_filename => $opt{cast_filename},
+        return_arrayref => $opt{return_arrayref}, 
+        write_head => $opt{write_head} ? $opt{result_names} : 0, 
     );
 }
 
