@@ -1,4 +1,4 @@
-# ABSTRACT: Reshape like R
+# ABSTRACT: Reshape data like R
 package SimpleR::Reshape;
 
 require Exporter;
@@ -7,6 +7,13 @@ require Exporter;
 
 our $VERSION     = 0.05;
 our $DEFAULT_SEP = ',';
+
+sub get_id_array_value {
+    my ($id, $arr) = @_;
+    ref($id) ne 'ARRAY' ?  $id :
+    $arr ?  @{$arr}[ @$id ] : @$id;
+}
+
 
 sub split_file {
     my ($f, %opt) = @_;
@@ -22,7 +29,7 @@ sub split_file {
         my ($r) = @_;
         return unless($r);
 
-        my $k = join($opt{sep}, @{$r}[ @{ $opt{id} } ]);
+        my $k = join($opt{sep}, get_id_array_value($opt{id}, $r));
         $k=~s#[\\\/,]#-#g;
 
         if(! exists $exist_fh{$k}){
@@ -81,8 +88,8 @@ sub read_table {
     my $row_deal_sub = sub {
         my ($row) = @_;
 
-        return if ( exists $opt{skip_sub} and $opt{skip_sub}->($row) );
-        my @s = exists $opt{conv_sub} ? $opt{conv_sub}->($row) : $row;
+        return if ( $opt{skip_sub} and $opt{skip_sub}->($row) );
+        my @s = $opt{conv_sub} ? $opt{conv_sub}->($row) : $row;
         return unless (@s);
 
         if ( exists $opt{write_sub} ) {
@@ -151,7 +158,7 @@ sub melt {
 
     my $names = $opt{names};
     if ( !exists $opt{measure} ) {
-        my %selected_id = map { $_ => 1 } @{ $opt{id} };
+        my %selected_id = map { $_ => 1 } get_id_array_value($opt{id});
         my @var_index = grep { !exists $selected_id{$_} } ( 0 .. $#$names );
         $opt{measure} = \@var_index;
     }
@@ -159,7 +166,7 @@ sub melt {
     $opt{conv_sub} = sub {
         my ($r) = @_;
         my @s;
-        my @id_cols = @{$r}[ @{ $opt{id} } ];
+        my @id_cols = get_id_array_value($opt{id}, $r);
         push @s, [ @id_cols, $names->[$_], $r->[$_] ] for @{ $opt{measure} };
         return @s;
     };
@@ -183,10 +190,13 @@ sub cast {
     $opt{conv_sub} = sub {
         my ($r) = @_;
 
-        my $k = join( $opt{sep}, @{$r}[ @{ $opt{id} } ] );
+        my @vr = get_id_array_value($opt{id}, $r);
+        my $k = join( $opt{sep},  @vr );
         if ( !exists $kv{$k} ) {
-            my %temp;
-            $temp{ $opt{names}[$_] } = $r->[$_] for @{ $opt{id} };
+            my @kr = get_id_array_value($opt{id}, $opt{names});
+            my %temp = map {
+                $kr[$_] => $vr[$_]
+            } (0 .. $#kr);
             $kv{$k} = \%temp;
         }
 
@@ -268,4 +278,132 @@ sub merge {
 
     return \@result;
 }
+
 1;
+
+=pod
+
+=encoding utf8
+
+=head1 名称
+
+L<SimpleR::Reshape> 数据处理转换
+
+=head1 说明
+
+接口山寨自R语言的read.table/write.table/merge
+
+还有reshape2包：http://cran.r-project.org/package=reshape2
+
+=head1 函数
+
+=begin html
+
+实例参考<a href="xt/">xt子文件夹</a>
+
+=end html
+
+=head2 read_table 
+
+支持 从文件或arrayref 按行读入数据，转换后输出新的 文件或arrayref
+
+    my $r = read_table(
+        'reshape_src.csv', 
+        skip_head=>1, 
+        conv_sub => sub { [ "$_[0][0] $_[0][1]", $_[0][2], $_[0][3] ] }, 
+
+        write_filename => '01.read_table.csv', 
+        #skip_sub => sub { $_[0][3]<200 }, 
+        #return_arrayref => 1, 
+        #write_head => [ "head_a", "key" , "value" ], 
+        #sep=>',', 
+        #charset=>'utf8', 
+    );
+
+=head2 write_table
+
+将指定数据写入文本文件
+
+    my $d = [ [qw/a b 1/], [qw/c d 2/] ]; 
+    write_table($d, 
+        file=> 'write_table.csv', 
+        header => [ 'ka', 'kb', 'cnt'], 
+        #sep => ',', 
+        #charset => 'utf8', 
+    );
+
+=head2 melt
+
+数据调整，参考R语言的reshape2包
+
+    my $r = melt('reshape_src.csv',
+        skip_head => 1, 
+
+        names => [ qw/day hour state cnt rank/ ], 
+
+        #skip_sub => sub { $_[0][3]<1000 }, 
+        id => [ 0, 1, 2 ],
+        measure => [3, 4], 
+        melt_filename => '02.melt.csv',
+        #return_arrayref => 0, 
+    );
+
+
+=head2 cast
+
+数据重组，参考R语言的reshape2包
+
+    my $r = cast('02.melt.csv', 
+        cast_filename => '03.cast.csv', 
+        #return_arrayref => 0, 
+        #write_head => 0, 
+
+        #key 有 cnt / rank 两种
+        names => [ qw/day hour state key value/ ], 
+        id => [ 0, 1, 2 ],
+        measure => 3, 
+        value => 4, 
+
+        stat_sub => sub { my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
+
+        result_names => [ qw/day hour state cnt rank/ ], 
+
+        #reduce_sub => sub { 
+        #   my ($r) = @_;
+        #   my $s=0 ; $s+= $_ for @$r; 
+        #   return [ $s ];
+        #   }, 
+    );
+
+注意：
+
+reduce_sub 是在读取数据的过程中处理value，默认是直接push到value列表里
+
+stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
+
+=head2 merge
+
+合并两个dataframe，在perl中是二层数组
+
+    my $r = merge( 
+        [ [qw/a b 1/], [qw/c d 2/] ], 
+        [ [qw/a b 3/], [qw/c d 4/] ], 
+        by => [ 0, 1], 
+        value => [2], 
+    );
+    # $r = [["a", "b", 1, 3], ["c", "d", 2, 4]]
+
+=head2 split_file
+
+把一个大文件按指定id或行数拆分成多个小文件
+    
+    my $src_file = '06.split_file.log';
+
+    split_file($src_file, id => [ 0 ] ,
+        # sep => ',', 
+        # split_filename => '06.test.log', 
+    );
+
+    split_file($src_file, line_cnt => 400);
+
+=cut
