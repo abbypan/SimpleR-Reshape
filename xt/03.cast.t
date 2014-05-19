@@ -7,7 +7,7 @@ use Data::Dump qw/dump/;
 
 #key : cnt / rank
 my $r = cast('02.melt.csv', 
-    cast_filename => '03.cast.csv', 
+    cast_file => '03.cast.csv', 
 
     names => [ qw/day hour state key value/ ], 
     id => [0, 1, 2],
@@ -15,7 +15,8 @@ my $r = cast('02.melt.csv',
     measure => 3, 
     value => 4, 
 
-    stat_sub => sub { my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
+    stat_sub => sub { 
+        my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
     #result_names => [ qw/main cnt rank/ ], 
     result_names => [ qw/day hour state cnt rank/ ], 
 );

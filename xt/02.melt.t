@@ -13,7 +13,7 @@ my $r = melt('reshape_src.csv',
     #skip_sub => sub { $_[0][3]<1000 }, 
     id => [ 0, 1, 2 ],
     measure => [3, 4], 
-    melt_filename => '02.melt.csv',
+    melt_file => '02.melt.csv',
 );
 #dump($r);
 

@@ -9,7 +9,7 @@ my $src_file = '06.split_file.log';
 
 split_file($src_file, id => [ 0 ] ,
     # sep => ',', 
-    # split_filename => '06.test.log', 
+    # split_file => '06.test.log', 
 );
 
 split_file($src_file, line_cnt => 400);

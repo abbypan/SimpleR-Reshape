@@ -10,7 +10,7 @@ my $r = read_table(
     skip_head=>1, 
     conv_sub => sub { [ "$_[0][0] $_[0][1]", $_[0][2], $_[0][3] ] }, 
 
-    write_filename => '01.read_table.csv', 
+    write_file => '01.read_table.csv', 
     #skip_sub => sub { $_[0][3]<200 }, 
     #return_arrayref => 1, 
     #sep=>',', 

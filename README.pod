@@ -27,7 +27,7 @@ L<SimpleR::Reshape> 数据处理转换
         skip_head=>1, 
         conv_sub => sub { [ "$_[0][0] $_[0][1]", $_[0][2], $_[0][3] ] }, 
 
-        write_filename => '01.read_table.csv', 
+        write_file => '01.read_table.csv', 
         #skip_sub => sub { $_[0][3]<200 }, 
         #return_arrayref => 1, 
         #write_head => [ "head_a", "key" , "value" ], 
@@ -42,7 +42,7 @@ L<SimpleR::Reshape> 数据处理转换
     my $d = [ [qw/a b 1/], [qw/c d 2/] ]; 
     write_table($d, 
         file=> 'write_table.csv', 
-        header => [ 'ka', 'kb', 'cnt'], 
+        head => [ 'ka', 'kb', 'cnt'], 
         #sep => ',', 
         #charset => 'utf8', 
     );
@@ -50,6 +50,9 @@ L<SimpleR::Reshape> 数据处理转换
 =head2 melt
 
 数据调整，参考R语言的reshape2包
+
+    #id => [1, 2, 3], 'somekey', sub { ... }
+    #measure => [4,5,6, ...]
 
     my $r = melt('reshape_src.csv',
         skip_head => 1, 
@@ -59,7 +62,7 @@ L<SimpleR::Reshape> 数据处理转换
         #skip_sub => sub { $_[0][3]<1000 }, 
         id => [ 0, 1, 2 ],
         measure => [3, 4], 
-        melt_filename => '02.melt.csv',
+        melt_file => '02.melt.csv',
         #return_arrayref => 0, 
     );
 
@@ -68,8 +71,20 @@ L<SimpleR::Reshape> 数据处理转换
 
 数据重组，参考R语言的reshape2包
 
+注意：
+
+reduce_sub 是在读取数据的过程中处理value，默认是直接push到value列表里
+
+stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
+
+id => 与melt同
+
+measure => return 1 value，取值类似1,2,3,4 
+
+value => return 1 value，取值类似1,2,3,4 
+
     my $r = cast('02.melt.csv', 
-        cast_filename => '03.cast.csv', 
+        cast_file => '03.cast.csv', 
         #return_arrayref => 0, 
         #write_head => 0, 
 
@@ -79,9 +94,11 @@ L<SimpleR::Reshape> 数据处理转换
         measure => 3, 
         value => 4, 
 
-        stat_sub => sub { my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
-
         result_names => [ qw/day hour state cnt rank/ ], 
+
+        #default_cell_value => 0,
+
+        stat_sub => sub { my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
 
         #reduce_sub => sub { 
         #   my ($r) = @_;
@@ -89,12 +106,6 @@ L<SimpleR::Reshape> 数据处理转换
         #   return [ $s ];
         #   }, 
     );
-
-注意：
-
-reduce_sub 是在读取数据的过程中处理value，默认是直接push到value列表里
-
-stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
 
 =head2 merge
 
@@ -116,7 +127,7 @@ stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
 
     split_file($src_file, id => [ 0 ] ,
         # sep => ',', 
-        # split_filename => '06.test.log', 
+        # split_file => '06.test.log', 
     );
 
     split_file($src_file, line_cnt => 400);
