@@ -3,10 +3,12 @@ package SimpleR::Reshape;
 
 require Exporter;
 @ISA    = qw(Exporter);
-@EXPORT = qw(read_table write_table melt cast merge split_file);
+@EXPORT = qw(read_table write_table melt cast merge split_file arrange);
 
 our $VERSION     = 0.06;
 our $DEFAULT_SEP = ',';
+
+use B::Deparse ();
 
 sub read_table {
     my ( $txt, %opt ) = @_;
@@ -282,4 +284,25 @@ sub split_file_line {
     close $fh;
 }
 
+sub arrange {
+    my ($df, %opt) = @_;
+    my $d = read_table($df, 
+        skip_head => $opt{skip_head}, 
+        sep => $opt{sep}, 
+        charset => $opt{charset}, 
+        return_arrayref=> 1, 
+    );
+
+    my $deparse = B::Deparse->new;
+    my $s = $deparse->coderef2text($opt{arrange_sub});
+    my @data = eval "sort $s \@\$d";
+
+    read_table(
+        \@data, 
+        %opt, 
+        write_file      => $opt{arrange_file},
+        return_arrayref => $opt{return_arrayref},
+        write_head      => $opt{write_head},
+    );
+}
 1;

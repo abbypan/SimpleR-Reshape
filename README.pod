@@ -6,9 +6,7 @@
 
 L<SimpleR::Reshape> 数据处理转换
 
-接口山寨自R语言的read.table/write.table/merge
-
-还有reshape2包：http://cran.r-project.org/package=reshape2
+接口山寨自R语言的read.table/write.table/merge，还有L<reshape2|http://cran.r-project.org/package=reshape2>、L<dplyr|http://cran.r-project.org/web/packages/dplyr/index.html>
 
 =head1 FUNCTION
 
@@ -131,5 +129,26 @@ value => return 1 value，取值类似1,2,3,4
     );
 
     split_file($src_file, line_cnt => 400);
+
+
+=head2 arrange
+  
+sort rows by some method
+
+按指定方法，将所有数据按行重新排序
+
+    my $r = arrange('reshape_src.csv', 
+        skip_head => 1, 
+        sep=> ',', 
+        charset => 'utf8', 
+
+        arrange_sub => sub { 
+            $a->[4] <=> $b->[4] or
+            $a->[3] <=> $b->[3] 
+        }, 
+        arrange_file => '07.arrange.csv', 
+        return_arrayref => 1, 
+        write_head => [ qw/day hour state cnt rank/ ], 
+    );
 
 =cut
