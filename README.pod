@@ -4,106 +4,155 @@
 
 =head1 NAME
 
-L<SimpleR::Reshape> 数据处理转换
+L<SimpleR::Reshape> 
 
-接口山寨自R语言的read.table/write.table/merge，还有L<reshape2|http://cran.r-project.org/package=reshape2>、L<dplyr|http://cran.r-project.org/web/packages/dplyr/index.html>
+Reshape data like R : read.table, write.table, merge, L<reshape2|http://cran.r-project.org/package=reshape2>, L<dplyr|http://cran.r-project.org/web/packages/dplyr/index.html>
+
+数据处理转换，接口山寨自R语言
 
 =head1 FUNCTION
 
 =begin html
 
-实例参考<a href="xt/">xt子文件夹</a>
+example : <a href="xt/"> xt/ </a>
+
+实例参考 xt 子文件夹
 
 =end html
 
 =head2 read_table 
 
-支持 从文件或arrayref 按行读入数据，转换后输出新的 文件或arrayref
+data : csv / arrayref / hashref , dim 2, 二维数据表
 
-    my $r = read_table(
-        'reshape_src.csv', 
-        skip_head=>1, 
-        conv_sub => sub { [ "$_[0][0] $_[0][1]", $_[0][2], $_[0][3] ] }, 
+input data -> filter (skip_sub) -> select / transform / mutate (conv_sub) -> output
 
-        write_file => '01.read_table.csv', 
-        #skip_sub => sub { $_[0][3]<200 }, 
-        #return_arrayref => 1, 
-        #write_head => [ "head_a", "key" , "value" ], 
+输入 数据 -> 过滤 行(skip_sub) -> 抽取/转换/新增 列 (conv_sub) -> 输出
+
+csv / arrayref data: row is $arrayref, hashref data : row is ($k, $v) 
+
+    my $df = 'reshape_src.csv';
+    my $r = read_table($df, 
         #sep=>',', 
-        #charset=>'utf8', 
+        charset=>'utf8', 
+
+        #skip_head=>0, 
+        skip_sub => sub {
+            my ($r) = @_;        # csv or arrayref
+            # my ($k, $v) = @_;  # hashref
+
+            $r->[3]<200 
+            }, 
+
+        conv_sub => sub { 
+            my ($r) = @_;        # csv or arrayref
+            # my ($k, $v) = @_;  # hashref
+
+            [ "$r->[0] $r->[1]", $r->[2], $r->[3] ] 
+            }, 
+
+        #write_head => [ "head_a", "key" , "value" ], 
+        #return_arrayref => 1, 
+        write_file => '01.read_table.csv', 
     );
+
 
 =head2 write_table
 
-将指定数据写入文本文件
+write data into csv 将指定数据写入文本文件
 
     my $d = [ [qw/a b 1/], [qw/c d 2/] ]; 
     write_table($d, 
         file=> 'write_table.csv', 
-        head => [ 'ka', 'kb', 'cnt'], 
         #sep => ',', 
-        #charset => 'utf8', 
+        head => [ 'ka', 'kb', 'cnt'], 
+        charset => 'utf8', 
     );
 
 =head2 melt
 
-数据调整，参考R语言的reshape2包
+melt data like R reshape2
 
-    #id => [1, 2, 3], 'somekey', sub { ... }
-    #measure => [4,5,6, ...]
+原始数据按id聚合，然后把measure的多个列映射成key-value对
+
+    #id / measure => [ 1, 2, 'somekey', sub { ... }, ], 4, 'somekey', sub { ... }
 
     my $r = melt('reshape_src.csv',
+        #sep=>',', 
+        charset => 'utf8', 
         skip_head => 1, 
+        #skip_sub => sub { $_[0][3]<1000 }, 
 
         names => [ qw/day hour state cnt rank/ ], 
-
-        #skip_sub => sub { $_[0][3]<1000 }, 
         id => [ 0, 1, 2 ],
         measure => [3, 4], 
-        melt_file => '02.melt.csv',
-        #return_arrayref => 0, 
+        #measure_names => [qw/.../], 
+
+        write_head => [ qw/day hour state key value/ ], 
+        return_arrayref => 1, 
+        melt_file => '02.melt.1.csv',
+    );
+
+    melt('reshape_src.csv',
+        skip_head => 1, 
+
+        #names => [ qw/day hour state cnt rank/ ], 
+        id => [ sub { "$_[0][0]d $_[0][1]h" } , 2 , 'test' ],
+        measure => [ 3, 4, sub { $_[0][3] * $_[0][4] } ], 
+        measure_names => [qw/cnt rank cxr/], 
+
+        write_head => [ qw/dayhour state somehead key value/ ], 
+        melt_file => '02.melt.2.csv',
     );
 
 
 =head2 cast
 
-数据重组，参考R语言的reshape2包
+cast data like R reshape2，原始数据按id聚合，根据指定的 measure(key) 分组，统计value
 
-注意：
+reduce_sub : process data when read each row，在读取每一行数据的过程中，顺便处理value
 
-reduce_sub 是在读取数据的过程中处理value，默认是直接push到value列表里
+stat_sub : process data after read all rows，在数据全部读取完毕后，对value列表进行最终统计
 
-stat_sub 是在数据读取完毕后，对value列表进行最终统计处理
+id : same as melt, 与melt相同
 
-id => 与melt同
-
-measure => return 1 value，取值类似1,2,3,4 
-
-value => return 1 value，取值类似1,2,3,4 
+measure/value : return 1 value，返回单个标量
 
     my $r = cast('02.melt.csv', 
-        cast_file => '03.cast.csv', 
-        #return_arrayref => 0, 
-        #write_head => 0, 
+            #sep => ',', 
 
-        #key 有 cnt / rank 两种
-        names => [ qw/day hour state key value/ ], 
-        id => [ 0, 1, 2 ],
-        measure => 3, 
-        value => 4, 
+            #key 有 cnt / rank 两种
+            names => [ qw/day hour state key value/ ], 
+            id => [ 0, 1, 2 ],
+            measure => 3, 
+            value => 4, 
+            
+            reduce_sub => sub { my ($last, $now) = @_; return $last+$now; }, 
 
-        result_names => [ qw/day hour state cnt rank/ ], 
+            write_head => 1, 
 
-        #default_cell_value => 0,
+            default_cell_value => 0,
 
-        stat_sub => sub { my ($vlist) = @_; my @temp = sort { $b <=> $a } @$vlist; return $temp[0] }, 
+            cast_file => '03.cast.1.csv', 
+            return_arrayref => 1, 
+        );
 
-        #reduce_sub => sub { 
-        #   my ($r) = @_;
-        #   my $s=0 ; $s+= $_ for @$r; 
-        #   return [ $s ];
-        #   }, 
-    );
+        cast('02.melt.csv', 
+            sep => ',', 
+
+            #names => [ qw/day hour state key value/ ], #key 有 cnt / rank 两种
+            id => [ sub { "$_[0][0] $_[0][1]" }, 2 ],
+            id_names => [ qw/dayhour state/ ],
+            measure => 3, 
+            measure_names => [ qw/rank cnt/ ],
+            value => 4, 
+
+            stat_sub => sub { my ($r) = @_; (sort { $b<=> $a } @$r)[0] }, 
+            default_cell_value => 0,
+
+            write_head => 1, 
+            cast_file => '03.cast.2.csv', 
+            return_arrayref => 0, 
+        );
 
 =head2 merge
 

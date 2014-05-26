@@ -13,23 +13,28 @@ use B::Deparse ();
 sub read_table {
     my ( $txt, %opt ) = @_;
 
-    $opt{sep} //= $DEFAULT_SEP;
-    $opt{skip_head} //= 0;
+    $opt{sep}        //= $DEFAULT_SEP;
+    $opt{skip_head}  //= 0;
+    $opt{write_head} //= 0;
     $opt{write_sub} = write_row_sub( $opt{write_file}, %opt )
       if ( exists $opt{write_file} );
     $opt{return_arrayref} //= exists $opt{write_file} ? 0 : 1;
 
     my @data;
-    if ( $opt{write_head} ) {
-        $opt{write_sub}->( $opt{write_head} ) if ( exists $opt{write_sub} );
-        push @data, $opt{write_head} if ( $opt{return_arrayref} );
-    }
 
-    my $row_deal_sub = sub {
-        my ($row) = @_;
+    my $deal_head_sub = sub {
+        my ( $o, $h ) = @_;
+        return unless ( $o->{write_head} );
+        my $wh = ref( $o->{write_head} ) eq 'ARRAY' ? $o->{write_head} : $h;
+        $o->{write_sub}->($wh) if ( exists $o->{write_sub} );
+        push @data, $wh if ( $o->{return_arrayref} );
+    };
 
-        return if ( $opt{skip_sub} and $opt{skip_sub}->($row) );
-        my @s = $opt{conv_sub} ? $opt{conv_sub}->($row) : $row;
+    my $deal_row_sub = sub {
+        my (@row) = @_;
+
+        return if ( $opt{skip_sub} and $opt{skip_sub}->(@row) );
+        my @s = $opt{conv_sub} ? $opt{conv_sub}->(@row) : @row;
         return unless (@s);
 
         if ( exists $opt{write_sub} ) {
@@ -42,20 +47,27 @@ sub read_table {
     if ( -f $txt ) {
         my $read_format = $opt{charset} ? "<:$opt{charset}" : "<";
         open my $fh, $read_format, $txt;
-        <$fh> if ( $opt{skip_head} );
+
+        my $sh = ( $opt{skip_head} ) ? <$fh> : undef;
+        $deal_head_sub->( \%opt, $sh );
+
         while ( my $d = <$fh> ) {
             chomp($d);
             my @temp = split $opt{sep}, $d;
-            $row_deal_sub->( \@temp );
+            $deal_row_sub->( \@temp );
         }
     }
     elsif ( ref($txt) eq 'ARRAY' ) {
+        my $sh = ( $opt{skip_head} ) ? <$fh> : undef;
+        $deal_head_sub->( \%opt, $sh );
+
         my $i = $opt{skip_head} ? 1 : 0;
-        $row_deal_sub->( $txt->[$_] ) for ( $i .. $#$txt );
+        $deal_row_sub->( $txt->[$_] ) for ( $i .. $#$txt );
     }
     elsif ( ref($txt) eq 'HASH' ) {
+        $deal_head_sub->( \%opt );
         while ( my ( $tk, $tr ) = each %$txt ) {
-            $row_deal_sub->($tr);
+            $deal_row_sub->( $tk, $tr );
         }
     }
 
@@ -68,10 +80,6 @@ sub write_row_sub {
 
     my $write_format = $opt{charset} ? ">:$opt{charset}" : ">";
     open my $fh, $write_format, $txt;
-
-    if ( $opt{head} ) {
-        print $fh join( $opt{sep}, @{ $opt{head} } ), "\n";
-    }
 
     my $w_sub = sub {
         my ($r) = @_;
@@ -87,6 +95,7 @@ sub write_row_sub {
 sub write_table {
     my ( $data, %opt ) = @_;
     my $w_sub = write_row_sub( $opt{file}, %opt );
+    $w_sub->( $opt{head} ) if ( $opt{head} );
     $w_sub->($_) for @$data;
     return $opt{file};
 }
@@ -95,15 +104,25 @@ sub melt {
     my ( $data, %opt ) = @_;
 
     my $names = $opt{names};
+
     if ( !exists $opt{measure} and ref( $opt{id} ) eq 'ARRAY' ) {
         my %s_id = map { $_ => 1 } map_arrayref_value( $opt{id} );
         $opt{measure} = [ grep { !exists $s_id{$_} } ( 0 .. $#$names ) ];
     }
 
+    my $measure_names = $opt{measure_names} || [
+        map_arrayref_value( $opt{measure}, $opt{names} )
+
+          #@{$names}[@{$opt{measure}}]
+    ];
+    my $n = $#$measure_names;
+
     $opt{conv_sub} = sub {
         my ($r) = @_;
-        my @id_cols = map_arrayref_value( $opt{id}, $r );
-        my @s = map { [ @id_cols, $names->[$_], $r->[$_] ] } @{ $opt{measure} };
+        my @id_cols = map_arrayref_value( $opt{id},      $r );
+        my @values  = map_arrayref_value( $opt{measure}, $r );
+        my @s =
+          map { [ @id_cols, $measure_names->[$_], $values[$_] ] } ( 0 .. $n );
         return @s;
     };
 
@@ -113,44 +132,75 @@ sub melt {
 
 sub map_arrayref_value {
     my ( $id, $arr ) = @_;
-
     my $t = ref($id);
+
     my @res =
-        ( $t eq 'CODE' ) ? $id->($arr)
-      : ( $t eq 'ARRAY' and $arr ) ? @{$arr}[@$id]
-      : ( $t eq 'ARRAY' ) ? @$id
-      : ( !$t and $id =~ /^\d+$/ ) ? $arr->[$id]
-      :                             $id;
+        ( $t eq 'ARRAY' ) ? ( map { map_arrayref_value( $_, $arr ) } @$id )
+      : ( $t eq 'CODE' ) ? $id->($arr)
+      : ( !$t and $arr and $id =~ /^\d+$/ ) ? $arr->[$id]
+      :                                       $id;
 
     wantarray ? @res : $res[0];
 }
 
 sub cast {
     my ( $data, %opt ) = @_;
-    $opt{stat_sub} ||= sub { $_[0][0] };
+    $opt{sep} //= ',';
+
+    #$opt{stat_sub} ||= sub { $_[0][0] };
     $opt{default_cell_value} //= 0;
 
+    # { id_k => m_k => [ value ] / reduce_value  }
+    my ( $kv, $m_names ) = cast_cut_group( $data, %opt );
+    $opt{measure_names} ||= $m_names;
+
+    my @cast_data;
+    while ( my ( $id_k, $r ) = each %$kv ) {
+        my @row = split( $opt{sep}, $id_k );
+        for my $m ( @{ $opt{measure_names} } ) {
+            my $v =
+                ( not exists $r->{$m} )   ? $opt{default_cell_value}
+              : ( exists $opt{stat_sub} ) ? $opt{stat_sub}->( $r->{$m} )
+              :                             $r->{$m};
+            push @row, $v;
+        }
+        push @cast_data, \@row;
+    }
+
+    if ( $opt{write_head} and ref( $opt{write_head} ) ne 'ARRAY' ) {
+        $opt{id_names} ||= [ map_arrayref_value( $opt{id}, $opt{names} ) ];
+        $opt{write_head} = $opt{result_names}
+          || [ @{ $opt{id_names} }, @{ $opt{measure_names} } ];
+    }
+
+    read_table(
+        \@cast_data,
+        write_file      => $opt{cast_file},
+        return_arrayref => $opt{return_arrayref},
+        write_head      => $opt{write_head},
+    );
+}
+
+sub cast_cut_group {
+    my ( $data, %opt ) = @_;
     my %kv;
     my %measure_name;
     $opt{conv_sub} = sub {
         my ($r) = @_;
 
-        my @vr = map_arrayref_value( $opt{id}, $r );
-        my $k = join( $opt{sep}, @vr );
-        if ( !exists $kv{$k} ) {
-            my @kr = map_arrayref_value( $opt{id}, $opt{names} );
-            my %temp = map { $kr[$_] => $vr[$_] } ( 0 .. $#kr );
-            $kv{$k} = \%temp;
-        }
+        my @id_v = map_arrayref_value( $opt{id}, $r );
+        my $id_k = join( $opt{sep}, @id_v );
 
-        my $v_name = map_arrayref_value( $opt{measure}, $r );
-        $measure_name{$v_name} = 1;
+        my $m_k = map_arrayref_value( $opt{measure}, $r );
+        $measure_name{$m_k} = 1;
 
         my $v = map_arrayref_value( $opt{value}, $r );
-        push @{ $kv{$k}{$v_name} }, $v;
-
         if ( exists $opt{reduce_sub} ) {
-            $kv{$k}{$v_name} = $opt{reduce_sub}->( $kv{$k}{$v_name} );
+            my $last_v = $kv{$id_k}{$m_k} // $opt{default_cell_value};
+            $kv{$id_k}{$m_k} = $opt{reduce_sub}->( $last_v, $v );
+        }
+        else {
+            push @{ $kv{$id_k}{$m_k} }, $v;
         }
         return;
     };
@@ -160,32 +210,7 @@ sub cast {
         return_arrayref => 0,
         write_head      => 0,
     );
-
-    my @measure_name = sort keys(%measure_name);
-    $opt{result_names} ||= [ @{ $opt{names} }[ @{ $opt{id} } ], @measure_name ];
-
-    while ( my ( $k, $r ) = each %kv ) {
-        for my $m_name (@measure_name) {
-            $r->{$m_name} =
-              exists $r->{$m_name}
-              ? $opt{stat_sub}->( $r->{$m_name} )
-              : $opt{default_cell_value};
-        }
-        $r->{$_} //= $opt{default_cell_value} for ( @{ $opt{result_names} } );
-    }
-
-    read_table(
-        \%kv,
-        conv_sub => sub {
-            my ($r) = @_;
-            my $v = [ @{$r}{ @{ $opt{result_names} } } ];
-            $r = undef;
-            return $v;
-        },
-        write_file      => $opt{cast_file},
-        return_arrayref => $opt{return_arrayref},
-        write_head      => $opt{write_head} ? $opt{result_names} : 0,
-    );
+    return ( \%kv, [ sort keys %measure_name ] );
 }
 
 sub merge {
@@ -285,24 +310,27 @@ sub split_file_line {
 }
 
 sub arrange {
-    my ($df, %opt) = @_;
-    my $d = read_table($df, 
-        skip_head => $opt{skip_head}, 
-        sep => $opt{sep}, 
-        charset => $opt{charset}, 
-        return_arrayref=> 1, 
+    my ( $df, %opt ) = @_;
+    my $d = read_table(
+        $df,
+        skip_head       => $opt{skip_head},
+        sep             => $opt{sep},
+        charset         => $opt{charset},
+        return_arrayref => 1,
     );
 
     my $deparse = B::Deparse->new;
-    my $s = $deparse->coderef2text($opt{arrange_sub});
-    my @data = eval "sort $s \@\$d";
+    my $s       = $deparse->coderef2text( $opt{arrange_sub} );
+    my @data    = eval "sort $s \@\$d";
 
     read_table(
-        \@data, 
-        %opt, 
+        \@data,
+        %opt,
         write_file      => $opt{arrange_file},
         return_arrayref => $opt{return_arrayref},
         write_head      => $opt{write_head},
+        head            => $opt{head},
     );
 }
+
 1;
