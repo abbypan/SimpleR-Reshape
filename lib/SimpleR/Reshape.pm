@@ -137,7 +137,7 @@ sub map_arrayref_value {
     my @res =
         ( $t eq 'ARRAY' ) ? ( map { map_arrayref_value( $_, $arr ) } @$id )
       : ( $t eq 'CODE' ) ? $id->($arr)
-      : ( !$t and $arr and $id =~ /^\d+$/ ) ? $arr->[$id]
+      : ( !$t and $arr and $id =~ /^\-?\d+$/ ) ? $arr->[$id]
       :                                       $id;
 
     wantarray ? @res : $res[0];
