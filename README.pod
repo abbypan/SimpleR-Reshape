@@ -127,10 +127,12 @@ measure/value : return 1 value，返回单个标量
             value => 4, 
             
             reduce_sub => sub { my ($last, $now) = @_; return $last+$now; }, 
+            #reduce_start_value => 0, 
 
             write_head => 1, 
 
             default_cell_value => 0,
+            #default_cast_value => 0, 
 
             cast_file => '03.cast.1.csv', 
             return_arrayref => 1, 

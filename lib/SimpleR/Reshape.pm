@@ -9,6 +9,8 @@ our $VERSION     = 0.06;
 our $DEFAULT_SEP = ',';
 
 use B::Deparse ();
+use Encode;
+use Encode::Locale;
 
 sub read_table {
     my ( $txt, %opt ) = @_;
@@ -149,6 +151,8 @@ sub cast {
 
     #$opt{stat_sub} ||= sub { $_[0][0] };
     $opt{default_cell_value} //= 0;
+    $opt{default_cast_value} //= $opt{default_cell_value};
+    $opt{reduce_start_value} //= $opt{default_cell_value};
 
     # { id_k => m_k => [ value ] / reduce_value  }
     my ( $kv, $m_names ) = cast_cut_group( $data, %opt );
@@ -159,10 +163,10 @@ sub cast {
         my @row = split( $opt{sep}, $id_k );
         for my $m ( @{ $opt{measure_names} } ) {
             my $v =
-                ( not exists $r->{$m} )   ? $opt{default_cell_value}
+                ( not exists $r->{$m} )   ? $opt{default_cast_value}
               : ( exists $opt{stat_sub} ) ? $opt{stat_sub}->( $r->{$m} )
               :                             $r->{$m};
-            push @row, $v;
+            push @row, ref($v) eq 'ARRAY' ? @$v : $v;
         }
         push @cast_data, \@row;
     }
@@ -196,7 +200,7 @@ sub cast_cut_group {
 
         my $v = map_arrayref_value( $opt{value}, $r );
         if ( exists $opt{reduce_sub} ) {
-            my $last_v = $kv{$id_k}{$m_k} // $opt{default_cell_value};
+            my $last_v = $kv{$id_k}{$m_k} // $opt{reduce_start_value};
             $kv{$id_k}{$m_k} = $opt{reduce_sub}->( $last_v, $v );
         }
         else {
@@ -274,7 +278,7 @@ sub split_file {
         $k =~ s#[\\\/,]#-#g;
 
         if ( !exists $exist_fh{$k} ) {
-            my $file = "$opt{split_file}.$k";
+            my $file = "$opt{split_file}.".encode(locale => $k);
             open $exist_fh{$k}, '>', $file;
         }
 
