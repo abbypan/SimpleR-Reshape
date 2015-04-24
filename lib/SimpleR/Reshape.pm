@@ -5,7 +5,7 @@ require Exporter;
 @ISA    = qw(Exporter);
 @EXPORT = qw(read_table write_table melt cast merge split_file arrange);
 
-our $VERSION     = 0.06;
+our $VERSION     = 0.07;
 our $DEFAULT_SEP = ',';
 
 use B::Deparse ();
@@ -279,7 +279,8 @@ sub split_file {
 
         if ( !exists $exist_fh{$k} ) {
             my $file = "$opt{split_file}.".encode(locale => $k);
-            open $exist_fh{$k}, '>', $file;
+            my $write_format = $opt{charset} ? ">:$opt{charset}" : ">";
+            open $exist_fh{$k}, $write_format, $file;
         }
 
         my $fhw = $exist_fh{$k};
