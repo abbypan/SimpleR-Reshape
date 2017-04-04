@@ -10,6 +10,20 @@ Reshape data like R : read.table, write.table, merge, L<reshape2|http://cran.r-p
 
 数据处理转换，接口山寨自R语言
 
+=head1  TOOL
+
+=head2  split_file.pl
+
+split_file.pl -f xxx.csv -l 500  -t yyy
+
+split_file.pl -f xxx.csv -i 0  -s ','  -t yyy
+
+=head2 merge_file.pl
+
+big.csv left join small.csv
+
+perl merge_file.pl -f small.csv -k 1 -v 0,2 -F big.csv -K 0 -V 0,1,2,3 -o merge.csv
+
 =head1 FUNCTION
 
 =begin html
@@ -167,6 +181,23 @@ merge 2 dataframe, 合并两个dataframe，在perl中是二层数组
         value => [2], 
     );
     # $r = [["a", "b", 1, 3], ["c", "d", 2, 4]]
+
+=head2 merge_file
+
+merge 2 txt file, 合并两个文本文件
+
+$big left join $small with some columns data
+
+    my $merge_fname = merge_file( 
+        $small,
+        $big, 
+
+        merge_file => "$big.merge.csv", 
+        by_x => [ 1 ], 
+        value_x => [0, 2], 
+        by_y => [ 0 ], 
+        value_y => [ 0, 1, 2, 3 ], 
+    );
 
 =head2 split_file
 

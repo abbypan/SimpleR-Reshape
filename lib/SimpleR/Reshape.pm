@@ -3,9 +3,9 @@ package SimpleR::Reshape;
 
 require Exporter;
 @ISA    = qw(Exporter);
-@EXPORT = qw(read_table write_table melt cast merge split_file arrange);
+@EXPORT = qw(read_table write_table melt cast merge merge_file split_file arrange);
 
-our $VERSION     = 0.07;
+our $VERSION     = 0.09;
 our $DEFAULT_SEP = ',';
 
 use B::Deparse ();
@@ -55,7 +55,7 @@ sub read_table {
 
         while ( my $d = <$fh> ) {
             chomp($d);
-            my @temp = split $opt{sep}, $d;
+            my @temp = split $opt{sep}, $d, -1;
             $deal_row_sub->( \@temp );
         }
     }
@@ -160,7 +160,7 @@ sub cast {
 
     my @cast_data;
     while ( my ( $id_k, $r ) = each %$kv ) {
-        my @row = split( $opt{sep}, $id_k );
+        my @row = split( $opt{sep}, $id_k, -1 );
         for my $m ( @{ $opt{measure_names} } ) {
             my $v =
                 ( not exists $r->{$m} )   ? $opt{default_cast_value}
@@ -247,7 +247,7 @@ sub merge {
 
     my @result;
     for my $cut (@cut_list) {
-        my @vs = split qr/$opt{sep}/, $cut;
+        my @vs = split qr/$opt{sep}/, $cut, -1;
         for my $i ( 0 .. $#raw ) {
             my $d     = $main{$cut}[$i];
             my $vlist = $raw[$i]{value};
@@ -258,6 +258,57 @@ sub merge {
     }
 
     return \@result;
+}
+
+sub merge_file {
+	# $y left join $x , with some coulumn
+	my ( $x, $y, %opt ) = @_;
+	$opt{default_cell_value} //= 0;
+	$opt{sep} //= ',';
+	$opt{merge_file} ||= "$y.merge";
+    $opt{skip_head} //= 0;
+
+	my $x_raw = {
+		by    => $opt{by_x} || $opt{by},
+		value => $opt{value_x} || $opt{value} ,
+	};
+	my %mem_x;
+	read_table($x, 
+			%opt, 
+			return_arrayref=>0, 
+			conv_sub => sub {
+			my ($r) = @_;
+			my $cut = join( $opt{sep}, @{$r}[@{$x_raw->{by}}] );
+			$mem_x{$cut} = $x_raw->{value} ? [ map { $r->[$_] // $opt{default_cell_value} } @{$x_raw->{value}} ] : $r;
+			});
+
+    my @null_x;
+    while(my ($mk, $mv) = each %mem_x){
+        my $mv_n = scalar(@$mv);
+        @null_x = ('') x $mv_n ;
+        last;
+    }
+
+	my $y_raw = {
+		by    => $opt{by_y} || $opt{by},
+		value => $opt{value_y} || $opt{value} ,
+	};
+
+	read_table($y, 
+			%opt,
+			write_file => $opt{merge_file}, 
+			return_arrayref=>0, 
+			conv_sub => sub {
+			my ($d) = @_;
+			my $cut = join( $opt{sep}, @{$d}[@{$y_raw->{by}}] );
+			my $vs = $y_raw->{value} ? [ map { $d->[$_] // $opt{default_cell_value} } @{$y_raw->{value}} ] : $d;
+			push @$vs, $mem_x{$cut} ? @{$mem_x{$cut}} : @null_x;
+            $_ //= '' for @$vs;
+			return $vs;
+			}, 
+		  );
+
+	return $opt{merge_file};
 }
 
 sub split_file {
@@ -277,7 +328,7 @@ sub split_file {
         my $k = join( $opt{sep}, map_arrayref_value( $opt{id}, $r ) );
         $k =~ s#[\\\/,]#-#g;
 
-        if ( !exists $exist_fh{$k} ) {
+        if ( ! exists $exist_fh{$k} ) {
             my $file = "$opt{split_file}.".encode(locale => $k);
             my $write_format = $opt{charset} ? ">:$opt{charset}" : ">";
             open $exist_fh{$k}, $write_format, $file;
