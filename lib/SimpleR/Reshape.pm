@@ -3,7 +3,7 @@ package SimpleR::Reshape;
 
 require Exporter;
 @ISA    = qw(Exporter);
-@EXPORT = qw(read_table write_table melt cast merge merge_file split_file arrange);
+@EXPORT = qw(read_table write_table melt cast merge merge_file split_file arrange map_cast_col);
 
 our $VERSION     = 0.09;
 our $DEFAULT_SEP = ',';
@@ -387,6 +387,32 @@ sub arrange {
         write_head      => $opt{write_head},
         head            => $opt{head},
     );
+}
+
+sub map_cast_col {
+    my ($df, %opt) = @_;
+    $opt{map_col_sub} ||= sub {
+        my ($r, $s) = @_;
+        return $r->[$opt{cast_col}]/$s;
+    };
+
+    my $s;
+    read_table($df, 
+        %opt,
+        return_arrayref=> 0, 
+        write_file => undef,
+        conv_sub => sub {
+            my ($r) = @_;
+            $s += $r->[$opt{cast_col}];
+        });
+
+    read_table($df, 
+        %opt,
+        conv_sub => sub {
+            my ($r) = @_;
+            my $x = $opt{map_col_sub}->($r, $s);
+            return [ @$r, $x ];
+        });
 }
 
 1;

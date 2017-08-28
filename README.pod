@@ -235,4 +235,33 @@ sort rows by some method
         write_head => [ qw/day hour state cnt rank/ ], 
     );
 
+=head2 map_cast_col
+
+stat column, then map column with the stat value
+
+按指定方法统计某个列，再根据统计值变换该列内容
+
+    my $df = [
+      [ 'a', '1' ],
+      [ 'b', '2' ],
+      [ 'c', '2' ],
+    ];
+
+    my $new_df = map_cast_col(
+      $df,
+      cast_col    => 1,
+      map_col_sub => sub {
+        my ( $r, $s ) = @_;
+        return $r->[1] / $s;
+      },
+    );
+
+    print Dumper( $new_df );
+
+    #$VAR1 = [
+    #[ 'a', 1, '0.2' ],
+    #[ 'b', 2, '0.4' ],
+    #[ 'c', 2, '0.4' ]
+    #];
+
 =cut
